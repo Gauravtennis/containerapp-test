@@ -35,13 +35,24 @@ var summaries = new[]
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
 };
 
+
 // Use the redis connection in a request
-app.MapGet("/", async (IConnectionMultiplexer redisConnection) =>
+app.MapGet("/key/{key}", async (string key, IConnectionMultiplexer redisConnection) =>
 {
     var db = redisConnection.GetDatabase();
-    //db.StringSet("myKey", "Hello from ASP.NET!");
-    var value = db.StringGet("myKey");
-    return $"myKey: {value}";
+    var value = await db.StringGetAsync(key);
+    
+    if (value.IsNull)
+        return Results.NotFound(new { key, message = "Key not found" });
+        
+    return Results.Ok(new { key, value = value.ToString() });
+});
+
+app.MapPost("/key", async (KeyValueRequest request, IConnectionMultiplexer redisConnection) =>
+{
+    var db = redisConnection.GetDatabase();
+    db.StringSet(request.Key, request.Value);
+    return Results.Ok(new { key = request.Key, value = request.Value, status = "saved" });
 });
 
 app.MapGet("/weatherforecast", () =>
@@ -65,3 +76,6 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
+
+
+record KeyValueRequest(string Key, string Value);
